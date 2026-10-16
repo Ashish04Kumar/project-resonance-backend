@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "project-synq-conversation"
+version = "0.1.0"
+description = "Conversation brain and local real-time voice service for Project Synq Chemistry Calls"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "langgraph>=0.2,<2",
+  "pydantic>=2.8,<3",
+  "python-dotenv>=1,<2",
+  "uvicorn[standard]>=0.30,<1",
+]
+
+[project.optional-dependencies]
+voice = [
+  "pipecat-ai[livekit,whisper,piper,google]>=0.0.108,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]

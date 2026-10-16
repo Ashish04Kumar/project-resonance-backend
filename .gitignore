@@ -1,0 +1,23 @@
+# Downloaded local speech models are large and are fetched automatically.
+*.onnx
+*.onnx.json
+
+# Local credentials, Python environment, and generated package/cache files.
+.env
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Private per-call transcript and state exports.
+call_logs/
+.env
+
+# TTS voice model
+en_US-amy-medium.onnx
+en_US-amy-medium.onnx.json
+
+# Environment secrets
+.env
+.env.*
+!.env.example
