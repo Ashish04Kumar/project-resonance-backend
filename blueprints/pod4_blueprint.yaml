@@ -1,0 +1,433 @@
+# Pod 6 "Wave-style" blueprint.
+#
+# Same shape as call_blueprint.yaml (Pod 5), plus a `wave` block. The call
+# follows stages in this file's order like a natural conversation: first who
+# the person is and where they are in life, then how dating has gone for them,
+# then what they want. Each stage has an intent (its slots); the AI asks in
+# its own casual words. A soft skip parks a stage and brings it back later
+# from a different side; a clear "I don't want to talk about it" drops it.
+# Stages, branches and revive lines follow docs/pod6-question-map.md (copied for Pod 4).
+# Numbers are starting values to tune.
+
+version: 1
+
+call:
+  max_call_seconds: 1080        # 18 minutes
+  wrap_up_seconds: 930          # start wrapping up at 15.5 minutes
+  close_seconds: 1020           # warm goodbye in the last minute
+  lab_enabled: false
+  segments:
+    warm_up: 0                  # no separate small-talk phase: stage 1 is the warm-up
+    core: 930
+    lab_handoff: 30
+    lab_follow_up: 330
+    close: 60
+  behind_schedule_seconds: 45
+  breather_when_ahead_seconds: 900   # effectively off: Wave stays on the person's thread
+  sensitive_after_user_turns: 4
+  sensitive_after_seconds: 120
+
+retries:
+  partial_max_asks: 3
+  partial_revisit_after_goals: 2
+  no_answer_max_asks: 3         # ask, ask again from another side, then ask it straight
+  uncertain_confidence: 0.6
+  asr_repair_max_attempts: 2
+
+detours:
+  max_per_call: 1
+  max_turns: 2
+  earliest_seconds: 120
+  roll_probability: 0.1
+  types:
+    user_thread: 0.8
+    light_tangent: 0.1
+    playful_what_if: 0.1
+  tangent_themes: [food, music, travel, festivals, weather]
+  return_styles: [soft_link, honest_return, light_joke]
+  max_return_attempts: 2
+
+fillers:
+  types:
+    agreement: 0.25
+    small_reaction: 0.25
+    thinking_aloud: 0.15
+    callback: 0.25
+    light_aside: 0.1
+  no_repeat_type_within_turns: 2
+  no_repeat_phrase_within_turns: 10
+
+voice:
+  min_callbacks_per_call: 3
+  callback_every_user_turns: 4
+  opener_no_repeat_within_turns: 10
+  opener_words: 3
+
+safety:
+  # Verify these numbers before any real user sees them.
+  resources:
+    - name: Tele-MANAS (mental health, free, 24x7)
+      contact: "14416"
+    - name: Women Helpline
+      contact: "181"
+    - name: Emergency
+      contact: "112"
+
+wave:
+  soft_skip_revisit_after_goals: 2
+  soft_skip_max_revisits: 1
+  followup_on_any_full_answer: true
+  max_consecutive_questions: 2   # then one turn that just talks: react, add a layer, leave space
+  pause_on_heavy_tone: true
+  flat_replies_before_revive: 2  # "okay", "yeah", "hmm" twice in a row: the AI takes the lead
+
+# Stages, in the order the call should flow (docs/pod6-question-map.md (copied for Pod 4)).
+# angles = openers, branches = what to ask next based on the reply,
+# revive = light lines to lead with when the talk goes flat,
+# framing = how a person would ask this stage, user_cues = words that mean
+# the user raised this stage themselves (then it comes next, even if sensitive).
+goals:
+  - id: life_context
+    label: "Their life right now: where they are, where they're from, what they do"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 2
+    slots:
+      # One slot for place: "I'm from Ahmedabad, moved here for work" answers it fully, so it is never re-asked.
+      - {id: location, ask_for: "where they live now and where they're from, including any move and why (one answer like 'I'm from X, moved here for work' covers it)"}
+      - {id: work_or_phase, ask_for: "what they do for work or study, or what phase of life they are in"}
+    angles:
+      - {id: calling_from, kind: preference, hint: "where they're calling from right now"}
+      - {id: originally_from, kind: story, hint: "whether they grew up there or moved, and what brought them"}
+      - {id: work_life, kind: story, hint: "what kind of work they do and how it's treating them, the job and the city"}
+      - {id: settling_in, kind: reaction, hint: "how settling in has honestly felt"}
+    branches:
+      - {when: "they name a city", ask: "originally from there, or did you move?"}
+      - {when: "they moved", ask: "what brought you there: job, studies, something else? then how settling in has been, honestly"}
+      - {when: "they are from that city", ask: "does it still feel like home, or are you itching to try somewhere new?"}
+      - {when: "they talk about work", ask: "what kind of work, and how is it treating you, the job and the city?"}
+      - {when: "they say they're doing nothing or between jobs", ask: "fair, sometimes a pause is needed; is it a break you chose, or one that just happened?"}
+    revive:
+      - "big cities never sleep; are you more of a late-night person or an early-morning one?"
+
+  - id: daily_life
+    label: "What fills their days and what they love"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 3
+    slots:
+      - {id: interests, ask_for: "what they like doing outside work, what gets them out of their head"}
+      - {id: why_it_matters, ask_for: "why one of those things matters to them or what it gives them"}
+    angles:
+      - {id: out_of_head, kind: preference, hint: "what actually gets them out of their head when they're not working"}
+      - {id: lose_hours, kind: story, hint: "something they can lose hours doing"}
+      - {id: learning_now, kind: story, hint: "something they've been learning or getting into lately"}
+      - {id: share_or_solo, kind: hypothetical, hint: "whether they'd want a partner to share it with them or keep it their own space"}
+    branches:
+      - {when: "they mention gaming", ask: "what kind of games, solo or with friends? then would you want a partner who plays with you, or is it your own space?"}
+      - {when: "they mention coding or learning", ask: "for work or for yourself? then what's pulling you toward it?"}
+      - {when: "they say just relaxing or quiet time", ask: "quiet in what way: alone at home, music, a walk? then do you recharge better alone or with people?"}
+      - {when: "they mention friends or festivals", ask: "who do you usually do that with?"}
+    revive:
+      - "a lot of people admit their free time is mostly scrolling; is that you too, or are you better than that?"
+
+  - id: dating_journey
+    label: "How dating has gone and what they hope for now"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 2
+    slots:
+      - {id: dating_experience, ask_for: "how dating has been for them lately: apps, people they've met, or a break"}
+      - {id: usual_pattern, ask_for: "what usually happens after they match or meet someone"}
+      - {id: looking_for, ask_for: "what they hope it turns into this time: casual, or something that could get serious"}
+    angles:
+      - {id: lately, kind: reaction, hint: "how dating has been lately: apps, people they've met, or a bit of a break"}
+      - {id: why_now, kind: story, hint: "what made them want to focus on dating now"}
+      - {id: after_match, kind: story, hint: "what usually happens after they match: does it fizzle or go somewhere"}
+      - {id: hoping_for, kind: hypothetical, hint: "what they'd want this next round to turn into"}
+    branches:
+      - {when: "they use apps", ask: "what usually happens after you match: does it fizzle, or actually go somewhere?"}
+      - {when: "things fizzle", ask: "does it feel like they lose interest, or like you're the one pushing?"}
+      - {when: "things go somewhere", ask: "when you meet, what decides if there's a second date?"}
+      - {when: "they took a break", ask: "what made you step back, and what's different now?"}
+      - {when: "they say it's good or nice (vague)", ask: "good as in you've met nice people, or good as in nothing bad happened?"}
+      - {when: "they are not sure what they want", ask: "if you had to pick: slow and friendly first, or know early if it's serious?"}
+    revive:
+      - "dating apps can feel like a second job, all that small talk; what's the most boring opening line you've gotten?"
+
+  - id: relationship_history
+    label: "Their past relationships and what they learned"
+    must_cover: true
+    skippable: true
+    sensitive: true
+    max_followups: 2
+    framing: >-
+      Ask permission and give the honest reason, like a caring friend: for example "If you don't mind sharing, can
+      I ask about your last relationship? Understanding what didn't work before helps me get what you'd want next
+      time, so it goes better." In Hinglish: "Agar share karna theek lage, toh pichle relationship ke baare mein
+      thoda bataoge? Isse samajh aayega ki kya kaam nahi aaya, taaki agli baar waisa na ho." No blame, no advice.
+    slots:
+      - {id: past_length, ask_for: "whether they have had serious relationships and roughly how long they lasted"}
+      - {id: why_ended, ask_for: "what changed or made it end, in their own words"}
+      - {id: lesson, ask_for: "what they would do differently or learned about what they need"}
+    angles:
+      - {id: last_one, kind: story, hint: "their last relationship and how long they were together"}
+      - {id: what_worked, kind: reaction, hint: "what made them work for so long"}
+      - {id: what_changed, kind: story, hint: "what changed toward the end"}
+      - {id: differently, kind: hypothetical, hint: "anything they'd do differently next time"}
+    branches:
+      - {when: "it lasted years", ask: "that's a big chapter; what made you two work for so long? then what changed toward the end?"}
+      - {when: "it was short", ask: "what made it fizzle, if you know?"}
+      - {when: "it ended for a reason like distance, fights or family", ask: "looking back, is there anything you'd do differently? (no blame, no advice)"}
+      - {when: "they get emotional", ask: "stay with it: 'that sounds like it really mattered'; no new question this turn"}
+    revive:
+      - "people often say their first big relationship teaches them the most, even if it ended; was that true for you?"
+    user_cues: ["relationship", "ex", "my ex", "girlfriend", "boyfriend", "breakup", "broke up", "past relationship", "rishta"]
+
+  - id: family_parents
+    label: "Their family and how their parents shaped what they want"
+    must_cover: true
+    skippable: true
+    sensitive: true
+    max_followups: 2
+    framing: >-
+      Ask gently and with curiosity, adding "if you don't mind me asking" for parents. Never label their family or
+      them. If they share something hard, stay with it before asking more.
+    slots:
+      - {id: family_closeness, ask_for: "what their family is like and how close they are"}
+      - {id: parents_influence, ask_for: "what their parents' relationship was like and how it shaped what they want or want to avoid"}
+      - {id: family_say, ask_for: "how much their family's opinion would matter in who they end up with"}
+    angles:
+      - {id: family_like, kind: story, hint: "what their family is like and whether they're close"}
+      - {id: parents_growing_up, kind: story, hint: "what their parents' relationship was like growing up"}
+      - {id: family_opinion, kind: preference, hint: "whether family's opinion would matter in who they end up with"}
+      - {id: away_from_family, kind: reaction, hint: "whether they miss family or the distance is kind of nice"}
+    branches:
+      - {when: "parents were close or loving", ask: "is that something you want for yourself too?"}
+      - {when: "parents fought, divorced or were distant", ask: "has that shaped what you want, or what you want to avoid? (gently, no labels)"}
+      - {when: "family has a big say", ask: "would your family's opinion matter in who you end up with?"}
+      - {when: "they live away from family", ask: "do you miss them, or is the distance kind of nice?"}
+    revive:
+      - "Indian families and dating, always a story; do your parents know you're on apps?"
+    user_cues: ["parents", "mom", "mother", "dad", "father", "mummy", "papa", "family", "ghar wale", "gharwale"]
+
+  - id: partner_attraction
+    label: "What draws them to someone and what puts them off"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 2
+    slots:
+      - {id: drawn_to, ask_for: "what draws them to a person, in their own words"}
+      - {id: meaning, ask_for: "what that quality actually looks like to them in real life"}
+      - {id: deal_breaker, ask_for: "what instantly puts them off"}
+    angles:
+      - {id: last_person, kind: story, hint: "what drew them to the last person they were really into"}
+      - {id: know_more, kind: preference, hint: "what makes them want to know someone more"}
+      - {id: put_off, kind: reaction, hint: "what instantly puts them off"}
+      - {id: this_or_that, kind: hypothetical, hint: "super funny but chaotic, or calm but a little quiet?"}
+    branches:
+      - {when: "they use a vague word like simple, kind or chill", ask: "what does that actually look like to you?"}
+      - {when: "they mention looks or vibe", ask: "and beyond the first impression, what keeps you interested?"}
+      - {when: "they don't know", ask: "try a this-or-that: super funny but chaotic, or calm but a little quiet?"}
+    revive:
+      - "everyone says 'good sense of humour', but everyone's humour is different; what actually makes you laugh?"
+
+  - id: relationship_priorities
+    label: "What matters most to them in a relationship"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 2
+    slots:
+      - {id: top_priority, ask_for: "the one thing that matters most to them in a relationship"}
+      - {id: non_negotiable, ask_for: "something they would never compromise on"}
+    angles:
+      - {id: one_thing, kind: preference, hint: "if they had to pick one thing that matters most in a relationship"}
+      - {id: never_compromise, kind: preference, hint: "something they'd never compromise on"}
+      - {id: respect_or_love, kind: reaction, hint: "whether respect matters more than love"}
+      - {id: day_to_day, kind: hypothetical, hint: "what a good relationship looks like on a normal day"}
+    branches:
+      - {when: "they say trust or loyalty", ask: "what does trust look like day to day, for you?"}
+      - {when: "they say space or independence", ask: "how much time together feels right to you?"}
+      - {when: "they say ambition or career", ask: "would you want someone equally driven, or someone more relaxed?"}
+      - {when: "they mention faith, culture or language", ask: "how important is it that they share that?"}
+    revive:
+      - "some people say respect matters more than love; do you agree, or is that too practical?"
+
+  - id: communication_affection
+    label: "How they connect and feel cared for"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 2
+    slots:
+      - {id: feels_cared_for, ask_for: "how they notice that someone really cares about them"}
+      - {id: shows_care, ask_for: "how they show care to someone close"}
+      - {id: contact_rhythm, ask_for: "how much they like to talk or text when close to someone"}
+    angles:
+      - {id: notice_care, kind: story, hint: "how they notice that someone really cares about them"}
+      - {id: texting_rhythm, kind: preference, hint: "texting all day, or one long call at night"}
+      - {id: small_thing, kind: story, hint: "a small thing someone did that stayed with them"}
+      - {id: showing_it, kind: preference, hint: "how they usually show someone they care"}
+    branches:
+      - {when: "they mention small gestures", ask: "what's a small thing someone did that stayed with you?"}
+      - {when: "they mention words", ask: "do you say it easily yourself?"}
+      - {when: "they mention needing space", ask: "how do you tell someone you need a bit of space?"}
+    revive:
+      - "honest question: good morning texts, sweet or too much?"
+
+  - id: conflict
+    label: "How they handle disagreements and make up"
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 1
+    slots:
+      - {id: conflict_style, ask_for: "whether they talk it out right away or cool down first in a disagreement"}
+      - {id: repair, ask_for: "how they make up, and whether saying sorry is easy or hard for them"}
+    angles:
+      - {id: talk_or_cool, kind: preference, hint: "talk it out right away, or cool down first"}
+      - {id: goes_quiet, kind: reaction, hint: "what they do when the other person goes quiet"}
+      - {id: saying_sorry, kind: preference, hint: "whether saying sorry is easy or hard for them"}
+      - {id: next_time, kind: hypothetical, hint: "what they'd want to go differently in fights next time"}
+    branches:
+      - {when: "they talk it out", ask: "and if the other person goes quiet?"}
+      - {when: "they cool down first", ask: "how long before you're ready to talk?"}
+      - {when: "fights ended a past relationship", ask: "what would you want to go differently next time?"}
+    revive:
+      - "some couples never go to bed angry, others need a full day; which camp are you in?"
+
+  - id: future_picture
+    label: "The future they picture"
+    must_cover: true
+    skippable: true
+    sensitive: false
+    max_followups: 1
+    framing: "Keep it light and pressure-free; they only share what they want to."
+    slots:
+      - {id: few_years, ask_for: "what a good life looks like for them a few years from now, such as settling down or marriage, only if they want to share"}
+      - {id: stay_or_move, ask_for: "whether they see themselves staying in this city or going wherever work takes them"}
+    angles:
+      - {id: good_life, kind: hypothetical, hint: "what a good life looks like a few years from now"}
+      - {id: stay_or_go, kind: preference, hint: "staying in this city, or going wherever work takes them"}
+      - {id: timeline, kind: reaction, hint: "whether they have a rough timeline in mind or no pressure"}
+      - {id: partner_flexible, kind: preference, hint: "whether a partner would need to be flexible about moving"}
+    branches:
+      - {when: "they mention marriage or settling down", ask: "any rough timeline in your head, or no pressure?"}
+      - {when: "they put career first", ask: "would you want a partner who's flexible about moving?"}
+    revive:
+      - "five years from now, do you picture a quiet home life or still out exploring?"
+
+  # --- Backup topics (optional). They fill the 17-18 minutes when the main stages are done,
+  # or when the remaining main stages are parked because the user didn't want to go there yet.
+  - id: friends_social
+    label: "Their friends and social life"
+    must_cover: false
+    skippable: true
+    sensitive: false
+    max_followups: 2
+    slots:
+      - {id: friend_circle, ask_for: "who their close people are and how often they see them"}
+      - {id: social_style, ask_for: "whether they like a big group or a few close people"}
+    angles:
+      - {id: close_people, kind: story, hint: "who they'd call first with good news"}
+      - {id: big_or_small, kind: preference, hint: "big group plans or a few close friends"}
+      - {id: friends_say, kind: reaction, hint: "what their friends would say they're like in a relationship"}
+      - {id: partner_and_friends, kind: hypothetical, hint: "how important it is that a partner gets along with their friends"}
+    branches:
+      - {when: "they have a close group", ask: "what do you usually do together?"}
+      - {when: "they say they don't have many friends here", ask: "is that something you miss, or are you okay with your own company?"}
+      - {when: "they mention a best friend", ask: "what would your best friend say about your type?"}
+    revive:
+      - "everyone has that one friend who gives terrible dating advice; who's yours?"
+
+  - id: fun_and_dates
+    label: "What fun and a good date look like to them"
+    must_cover: false
+    skippable: true
+    sensitive: false
+    max_followups: 2
+    slots:
+      - {id: ideal_date, ask_for: "what a really good date looks like to them"}
+      - {id: fun_together, ask_for: "what they'd love to do together with a partner, like travel, food or plans"}
+    angles:
+      - {id: perfect_date, kind: hypothetical, hint: "their idea of a perfect first date"}
+      - {id: best_date, kind: story, hint: "the best date they've ever been on"}
+      - {id: trip_or_home, kind: preference, hint: "a spontaneous trip or a cosy night in"}
+      - {id: food_test, kind: reaction, hint: "whether a shared love of food matters to them"}
+    branches:
+      - {when: "they like going out", ask: "café, street food, or somewhere fancy?"}
+      - {when: "they like staying in", ask: "what's a perfect night in for you?"}
+      - {when: "they mention travel", ask: "mountains or beaches, and plan everything or go with the flow?"}
+    revive:
+      - "first dates over coffee are safe but a bit boring; what would you actually rather do?"
+
+  - id: lifestyle_habits
+    label: "Their daily routine and lifestyle habits"
+    must_cover: false
+    skippable: true
+    sensitive: false
+    max_followups: 1
+    framing: "Keep it light and without any judgement; they only share what they want to."
+    slots:
+      - {id: routine, ask_for: "what their daily routine is like, for example early riser or night owl, fitness"}
+      - {id: habits, ask_for: "how they feel about things like drinking or smoking, for themselves or a partner, only if they want to share"}
+    angles:
+      - {id: early_or_late, kind: preference, hint: "early riser or night owl"}
+      - {id: weekday, kind: story, hint: "what a normal weekday looks like for them"}
+      - {id: fitness, kind: preference, hint: "whether fitness or sports are part of their life"}
+      - {id: partner_habits, kind: reaction, hint: "whether a partner's habits like drinking or smoking would matter to them"}
+    branches:
+      - {when: "they're a night owl", ask: "would it bother you if your partner sleeps at ten?"}
+      - {when: "they mention fitness", ask: "would you want a partner who's into it too?"}
+      - {when: "they mention drinking or smoking", ask: "is that a deal-breaker either way, or not a big deal?"}
+    revive:
+      - "honest one: are you the person who snoozes the alarm five times?"
+
+  - id: faith_culture
+    label: "Faith, culture and traditions"
+    must_cover: false
+    skippable: true
+    sensitive: true
+    max_followups: 1
+    framing: "Ask lightly and respectfully, with 'if you don't mind me asking'; never assume their faith or judge it."
+    slots:
+      - {id: faith_role, ask_for: "how much faith, culture or traditions matter in their life"}
+      - {id: partner_share, ask_for: "whether it matters that a partner shares that"}
+    angles:
+      - {id: festivals, kind: story, hint: "how they usually celebrate festivals"}
+      - {id: traditions, kind: preference, hint: "which traditions they'd want to keep"}
+      - {id: same_or_open, kind: reaction, hint: "whether a partner from a different background would matter"}
+      - {id: language, kind: preference, hint: "whether sharing a language or culture matters to them"}
+    branches:
+      - {when: "faith matters a lot", ask: "would you want a partner who shares it, or just respects it?"}
+      - {when: "they're not religious", ask: "would it matter if your partner was?"}
+      - {when: "they mention family traditions", ask: "which ones would you want to keep in your own home?"}
+    revive:
+      - "festivals are the best excuse for good food; which one is your favourite?"
+
+  - id: money_mindset
+    label: "How they think about money and plans"
+    must_cover: false
+    skippable: true
+    sensitive: false
+    max_followups: 1
+    framing: "Keep it light and practical, never about how much they earn."
+    slots:
+      - {id: spend_or_save, ask_for: "whether they are more of a saver or a spender"}
+      - {id: partner_money, ask_for: "how they'd like to handle money things with a partner, like splitting bills"}
+    angles:
+      - {id: saver_spender, kind: preference, hint: "saver or spender"}
+      - {id: splurge, kind: story, hint: "the last thing they happily splurged on"}
+      - {id: split_bill, kind: reaction, hint: "how they feel about splitting the bill on dates"}
+      - {id: big_goal, kind: hypothetical, hint: "a big thing they're saving up for"}
+    branches:
+      - {when: "they're a saver", ask: "what are you saving up for?"}
+      - {when: "they're a spender", ask: "what's always worth spending on, for you?"}
+      - {when: "they mention splitting bills", ask: "would you rather split, take turns, or not keep count?"}
+    revive:
+      - "quick one: splitting the bill on a first date, fair or awkward?"

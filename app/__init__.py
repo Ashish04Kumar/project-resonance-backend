@@ -1,1 +1,1 @@
-"""Project Synq conversation backend."""
+"""Resonance conversation backend."""

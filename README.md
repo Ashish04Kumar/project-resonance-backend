@@ -1,4 +1,6 @@
-# Project Synq conversation and voice backend
+# Resonance backend (resonance-backend)
+
+The backend for the Resonance app (`../resonance-native`): the Synthe voice call, accounts, profiles, swipes and the Buddy chat (the embedded Umbrella companion). The call in use is Pod 4, Synthe on our own STT → LLM → TTS pipeline (`docs/pod4-architecture.md`); Pod 5 below is the Gemini Live call. Project rules and decisions: `AGENTS.md`. Docs index: `docs/README.md`.
 
 The backend connects real mobile calls to Gemini Live's native speech-to-speech model. If Gemini Live is not configured or cannot start, the existing local call path is used:
 
@@ -13,7 +15,7 @@ No call audio is saved. By default, transcripts and call state stay in process m
 ## Local prerequisites
 
 - Python 3.11 or newer
-- A Gemini API key in `backend/.env` for the primary real-time audio conversation
+- A Gemini API key in `.env` for the primary real-time audio conversation
 - Ollama with `smollm2:360m` downloaded and running for local fallback and text-mode calls
 - LiveKit Server running in development mode
 - The Android phone and development computer on the same Wi-Fi network
@@ -35,14 +37,14 @@ Development mode uses `devkey` and `secret`. These are local-only credentials; d
 Install backend dependencies and run the API:
 
 ```bash
-cd backend
+cd /home/bs/projects/resonance-backend
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e '.[voice]'
 export SYNQ_LLM_PROVIDER=ollama
 export SYNQ_OLLAMA_MODEL=smollm2:360m
 export SYNQ_LLM_FALLBACK=gemini
-# Set these in backend/.env. The backend loads that file; never put the key in the app.
+# Set these in .env. The backend loads that file; never put the key in the app.
 # GEMINI_API_KEY='your-key-from-google-ai-studio'
 # SYNQ_VOICE_PROVIDER=gemini_live
 # SYNQ_GEMINI_LIVE_MODEL=gemini-3.8-live
@@ -57,14 +59,14 @@ Gemini Live processes microphone audio and returns spoken audio and live transcr
 
 The first local fallback call downloads the Whisper and Piper models. Allow time and disk space for that startup. Defaults are Gemini Live `gemini-3.8-live` with voice `Kore`, Ollama `smollm2:360m`, Whisper `base`, and Piper `en_US-amy-medium`. Override with `SYNQ_GEMINI_LIVE_MODEL`, `SYNQ_GEMINI_LIVE_VOICE`, `SYNQ_OLLAMA_MODEL`, `SYNQ_VOICE_STT_MODEL`, and `SYNQ_VOICE_TTS_VOICE`.
 
-When `SYNQ_EXPORT_CALL_LOGS=true`, the backend writes a call JSON file on `POST /api/v1/calls/{call_id}/end` to `backend/call_logs/` (or `SYNQ_CALL_LOG_DIRECTORY`). Filenames use Indian Standard Time, for example `call_2026-10-17_14-30-00_IST_<call-id>.json`. Each file includes the full available transcript and final LangGraph conversation state. These files may contain sensitive personal conversation content; keep the option off unless you need it and delete exports when finished reviewing them. Raw microphone audio is never written.
+When `SYNQ_EXPORT_CALL_LOGS=true`, the backend writes a call JSON file on `POST /api/v1/calls/{call_id}/end` to `call_logs/` (or `SYNQ_CALL_LOG_DIRECTORY`). Filenames use Indian Standard Time, for example `call_2026-10-17_14-30-00_IST_<call-id>.json`. Each file includes the full available transcript and final LangGraph conversation state. These files may contain sensitive personal conversation content; keep the option off unless you need it and delete exports when finished reviewing them. Raw microphone audio is never written.
 
 ## Mobile development build
 
 LiveKit uses native Android WebRTC code and does not work in Expo Go. In another terminal:
 
 ```bash
-cd mobile
+cd /home/bs/projects/resonance-native
 npx expo run:android
 npx expo start --lan
 ```
@@ -78,6 +80,10 @@ Open the installed development build on the phone, allow microphone access, and 
 - `POST /api/v1/calls/{call_id}/turn` remains available for text harnesses.
 - `POST /api/v1/calls/{call_id}/end` closes the session and clears its in-memory transcript.
 - `GET /healthz` checks the API process.
+
+Pod 4 (`SYNQ_CONVERSATION_POD=pod4`, the default) is the call in use: the Wave conversation on our own STT → LLM → TTS pipeline. Its call export sets `conversation_schema` to `pod4-v1`. See `docs/pod4-architecture.md`. Pods 1, 2, 3 and 6 were removed on 2026-10-22.
+
+Pod 5 (`SYNQ_CONVERSATION_POD=pod5`) implements the Kismet AI call requirements on Gemini Live. Its goals, slots, limits and clock live in `blueprints/call_blueprint.yaml`, which is validated at startup. Its call export adds `final_state.coverage_report` and `final_state.seed`. Run its tests with `.venv/bin/python -m unittest test_pod5`. Requirement status: `docs/pod5-kismet-status.md`.
 
 The Gemini Live service returns native audio and both sides' speech transcripts. Its session uses context compression for longer calls. If Gemini Live cannot establish a session, the backend switches to local Whisper/Ollama/Piper and keeps the call on the same LiveKit room.
 

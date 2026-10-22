@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 
 
 LanguageMode = Literal["english", "hinglish"]
-ConversationPodId = Literal["pod1", "pod2"]
+ConversationPodId = Literal["pod4", "pod5"]
 
 
 class CreateCallRequest(BaseModel):

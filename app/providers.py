@@ -86,11 +86,13 @@ class GeminiChatProvider:
 
     name = "gemini"
 
-    async def complete(self, messages: list[ChatMessage], *, temperature: float) -> str:
-        return await asyncio.to_thread(self._complete_sync, messages, temperature)
+    async def complete(
+        self, messages: list[ChatMessage], *, temperature: float, max_output_tokens: int = 180
+    ) -> str:
+        return await asyncio.to_thread(self._complete_sync, messages, temperature, max_output_tokens)
 
     @staticmethod
-    def _complete_sync(messages: list[ChatMessage], temperature: float) -> str:
+    def _complete_sync(messages: list[ChatMessage], temperature: float, max_output_tokens: int = 180) -> str:
         if not settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY is not configured")
 
@@ -111,7 +113,7 @@ class GeminiChatProvider:
 
         body: dict[str, object] = {
             "contents": contents,
-            "generationConfig": {"temperature": temperature, "maxOutputTokens": 180},
+            "generationConfig": {"temperature": temperature, "maxOutputTokens": max_output_tokens},
         }
         if system_parts:
             body["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_parts)}]}

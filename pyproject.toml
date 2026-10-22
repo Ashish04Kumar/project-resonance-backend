@@ -3,12 +3,15 @@ requires = ["setuptools>=69"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "project-synq-conversation"
+name = "resonance-conversation"
 version = "0.1.0"
-description = "Conversation brain and local real-time voice service for Project Synq Chemistry Calls"
+description = "Conversation brain and local real-time voice service for Resonance Chemistry Calls"
 requires-python = ">=3.11"
 dependencies = [
+  "argon2-cffi>=23,<26",
+  "asyncpg>=0.29,<1",
   "fastapi>=0.115,<1",
+  "pyjwt>=2.8,<3",
   "langgraph>=0.2,<2",
   "pydantic>=2.8,<3",
   "python-dotenv>=1,<2",
@@ -17,7 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 voice = [
-  "pipecat-ai[livekit,whisper,piper,google]>=0.0.108,<1",
+  "pipecat-ai[livekit,whisper,piper,google,sarvam]>=0.0.108,<1",
 ]
 
 [tool.setuptools.packages.find]

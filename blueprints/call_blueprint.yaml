@@ -1,0 +1,228 @@
+# Kismet AI Call blueprint for Pod 5.
+#
+# This file is the single source of truth for what the call must learn, in what
+# limits, and on what clock (requirement TOP-6). The LLM never invents topics,
+# timing or limits; it only words the next turn. The backend validates this
+# file when it starts and refuses to start Pod 5 if it is invalid.
+#
+# Numbers marked "default" in the requirements are starting values to tune.
+# All times are seconds of talk time (Chemistry Lab games are not counted).
+
+version: 1
+
+call:
+  max_call_seconds: 1020        # TIME-1: warm close by 17 minutes
+  wrap_up_seconds: 840          # TIME-2: wrap-up at 14 minutes, default
+  close_seconds: 960            # last 60 s: say goodbye, no new questions
+  # The Chemistry Lab is not built yet. While this is false, Part 1 runs
+  # from warm-up straight into wrap-up and close.
+  lab_enabled: false
+  segments:                     # TIME-3 default targets
+    warm_up: 60
+    core: 520
+    lab_handoff: 30
+    lab_follow_up: 330
+    close: 60
+  behind_schedule_seconds: 45   # DET-4: no detours or deepening follow-ups beyond this
+  # When coverage is this far ahead of an even pace, take one casual turn
+  # between goals so the call never feels like a form (TIME-4).
+  breather_when_ahead_seconds: 30
+  sensitive_after_user_turns: 6 # TOP-5: sensitive goals only after some rapport
+  sensitive_after_seconds: 240
+
+retries:
+  partial_max_asks: 3           # partial answer: 3 asks in total, then "not covered"
+  partial_revisit_after_goals: 2 # come back after 2 other goals
+  no_answer_max_asks: 2         # no answer / off topic: 2 asks in total
+  uncertain_confidence: 0.6     # RETRY-2: below this the answer counts as partial
+  asr_repair_max_attempts: 2    # VOICE-8: never loop more than 2 "dobara bologe?"
+
+detours:
+  max_per_call: 3               # DET-1
+  max_turns: 2                  # DET-1
+  earliest_seconds: 90          # DET-2
+  roll_probability: 0.2         # DET-3
+  types:                        # DET-3 weights
+    user_thread: 0.5            # follow-up on something the user said
+    light_tangent: 0.3          # food, music, travel, festivals, weather
+    playful_what_if: 0.2
+  tangent_themes: [food, music, travel, festivals, weather]
+  return_styles: [soft_link, honest_return, light_joke]   # DET-5
+  max_return_attempts: 2        # return, return once more, then ask directly
+
+fillers:                        # FILL-1 weights; code picks the type, the AI words it
+  types:
+    agreement: 0.3
+    small_reaction: 0.3
+    thinking_aloud: 0.15
+    callback: 0.15
+    light_aside: 0.1
+  no_repeat_type_within_turns: 2   # FILL-2
+  no_repeat_phrase_within_turns: 10
+
+voice:
+  min_callbacks_per_call: 3     # VOICE-7
+  callback_every_user_turns: 4
+  opener_no_repeat_within_turns: 10   # VOICE-3
+  opener_words: 3
+
+safety:
+  # SAFE-2 support resources shown in the app and offered by the AI.
+  # Verify these numbers before any real user sees them.
+  resources:
+    - name: Tele-MANAS (mental health, free, 24x7)
+      contact: "14416"
+    - name: Women Helpline
+      contact: "181"
+    - name: Emergency
+      contact: "112"
+
+# Goals: what the call must learn. Order below is the "warm first" order used
+# when nothing in the conversation suggests a better next goal (TOP-5).
+# Each slot is one fact the user must state. A goal is covered only when every
+# slot has a quote from the user's own words.
+goals:
+  - id: weekend_downtime
+    label: Weekend and downtime style
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 1
+    slots:
+      - id: typical_free_time
+        ask_for: what they usually do with a free day or weekend
+      - id: social_energy
+        ask_for: whether they recharge with people or on their own
+    angles:
+      - {id: last_weekend, kind: story, hint: what they did last weekend or on a recent free day}
+      - {id: perfect_sunday, kind: hypothetical, hint: their ideal lazy Sunday with no plans}
+      - {id: plans_or_flow, kind: preference, hint: planned weekends versus going with the flow}
+      - {id: cancelled_plans, kind: reaction, hint: how they feel when weekend plans get cancelled}
+      - {id: recharge, kind: preference, hint: what actually recharges them after a long week}
+
+  - id: communication_affection
+    label: Communication and affection style
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 1
+    slots:
+      - id: shows_care
+        ask_for: how they show care or affection to someone close
+      - id: feels_cared_for
+        ask_for: what makes them feel cared for
+      - id: contact_rhythm
+        ask_for: how often they like to talk or text when close to someone
+    angles:
+      - {id: small_gesture, kind: story, hint: a small gesture from someone that meant a lot}
+      - {id: texting_rhythm, kind: preference, hint: constant texting versus a good call at night}
+      - {id: bad_day, kind: hypothetical, hint: what they would want from a partner on a bad day}
+      - {id: forgot_reply, kind: reaction, hint: how they feel when a reply takes hours}
+      - {id: showing_love, kind: preference, hint: how they usually show someone they care}
+
+  - id: values_priorities
+    label: Values and priorities
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 1
+    slots:
+      - id: core_values
+        ask_for: one or two things that matter most to them in life
+      - id: current_priority
+        ask_for: what they are focused on in this phase of life
+    angles:
+      - {id: proud_moment, kind: story, hint: a recent moment they felt proud of themselves}
+      - {id: non_negotiable, kind: preference, hint: a value they would never compromise on}
+      - {id: five_years, kind: hypothetical, hint: what they hope life looks like in a few years}
+      - {id: busy_week, kind: reaction, hint: what they protect even in a crazy busy week}
+
+  - id: conflict
+    label: How they handle conflict
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 1
+    slots:
+      - id: conflict_style
+        ask_for: what they do in a disagreement, talk it out or take space
+      - id: repair
+        ask_for: how they make up or move on after a disagreement
+    angles:
+      - {id: last_argument, kind: story, hint: a small recent disagreement with a friend or family and how it went}
+      - {id: cool_down, kind: preference, hint: talk it out right away versus cool down first}
+      - {id: partner_upset, kind: hypothetical, hint: what they would do if a partner was upset with them}
+      - {id: silent_treatment, kind: reaction, hint: how they react when someone goes quiet after a fight}
+      - {id: saying_sorry, kind: preference, hint: how easy or hard saying sorry is for them}
+
+  - id: partner_wants
+    label: What they want from a partner
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 1
+    slots:
+      - id: key_qualities
+        ask_for: the qualities they most want in a partner
+      - id: deal_breaker
+        ask_for: one thing that would be a deal-breaker for them
+    angles:
+      - {id: first_notice, kind: preference, hint: what they notice first that makes them want to know someone more}
+      - {id: green_flag, kind: story, hint: a green flag they saw in someone that stayed with them}
+      - {id: red_flag, kind: reaction, hint: a habit that would instantly put them off}
+      - {id: ideal_date, kind: hypothetical, hint: what someone would do on a first date that would win them over}
+
+  - id: real_life_scenario
+    label: One real-life scenario
+    must_cover: true
+    skippable: false
+    sensitive: false
+    max_followups: 0
+    slots:
+      - id: scenario_response
+        ask_for: what they would actually do in the scenario
+      - id: scenario_reason
+        ask_for: why they would handle it that way
+    # One scenario is picked per call with the call's seed.
+    scenarios:
+      - a partner cancels a planned dinner at the last minute for work
+      - their partner's close friend does not seem to like them
+      - one of them gets a great job offer in another city
+      - they and their partner disagree on how to spend a long weekend
+    angles:
+      - {id: scenario_direct, kind: hypothetical, hint: put the chosen scenario lightly and ask what they would do}
+      - {id: scenario_story, kind: story, hint: whether something like the chosen scenario ever happened to them}
+      - {id: scenario_choice, kind: preference, hint: offer two ways to handle the chosen scenario and ask which feels like them}
+      - {id: scenario_reaction, kind: reaction, hint: their first gut reaction to the chosen scenario}
+
+  - id: family_future
+    label: Family and future expectations
+    must_cover: true
+    skippable: false
+    sensitive: true
+    max_followups: 0
+    slots:
+      - id: family_role
+        ask_for: how involved family is in their life and big decisions
+      - id: future_picture
+        ask_for: what they picture for the future, such as marriage or kids, only if they want to share
+    angles:
+      - {id: family_vibe, kind: story, hint: what their family is like on a normal Sunday}
+      - {id: family_say, kind: preference, hint: how much family opinion matters in their big choices}
+      - {id: future_home, kind: hypothetical, hint: what home life they picture a few years from now}
+      - {id: festivals, kind: reaction, hint: "how they like to spend festivals, with family or their own way"}
+
+  - id: past_lessons
+    label: Past-relationship lessons (stated only)
+    must_cover: false
+    skippable: true
+    sensitive: true
+    max_followups: 0
+    slots:
+      - id: lesson
+        ask_for: one thing a past relationship taught them, only if they want to share
+    angles:
+      - {id: learned, kind: preference, hint: one thing they learned about what they need in a relationship}
+      - {id: do_differently, kind: hypothetical, hint: one thing they would do differently next time}
+      - {id: changed_mind, kind: reaction, hint: something they used to want that they no longer care about}
+      - {id: advice_self, kind: story, hint: what they would tell their younger self about relationships}

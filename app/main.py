@@ -10,8 +10,18 @@ from fastapi import FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
+from . import db
+from .auth import router as auth_router
+from .buddy import close_companion
+from .buddy import router as buddy_router
+from .discovery import router as discovery_router
+from .profile import router as profile_router
+from .profile_store import media_router
+from .profile_store import router as profile_store_router
 from .config import settings
 from .conversation import call_store, generate_turn
+from .conversation_pod5 import pod5_coverage_report
+from .conversation_pod4 import pod4_coverage_report
 from .conversation_pods import get_conversation_pod, pod_catalog
 from .models import (
     CallStatusResponse,
@@ -27,12 +37,19 @@ from .voice_sessions import client_livekit_url, start_agent, stop_agent
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    try:
+        await db.connect()
+    except Exception:
+        # Voice calls must keep working even when the database is down.
+        logger.exception("DATABASE UNAVAILABLE; account features are disabled")
     yield
-    # This prototype intentionally keeps no sessions beyond process lifetime.
+    await close_companion()
+    await db.disconnect()
+    # Call sessions themselves stay in memory only, for the process lifetime.
 
 
 app = FastAPI(
-    title="Project Synq Conversation API",
+    title="Resonance Conversation API",
     version="0.1.0",
     description="Local development API for LangGraph conversation sessions and Pipecat voice calls.",
     lifespan=lifespan,
@@ -41,9 +58,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.allowed_origins),
     allow_credentials=True,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PUT", "PATCH"],
     allow_headers=["Content-Type", "Authorization"],
 )
+app.include_router(auth_router)
+app.include_router(profile_router)
+app.include_router(profile_store_router)
+app.include_router(media_router)
+app.include_router(discovery_router)
+app.include_router(buddy_router)
 
 
 @app.get("/healthz")
@@ -66,11 +89,14 @@ async def create_call(payload: CreateCallRequest) -> CreateCallResponse:
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="SYNQ_CONVERSATION_POD must be set to pod1 or pod2.",
+            detail="SYNQ_CONVERSATION_POD must be set to pod4 or pod5.",
         ) from exc
     session = await call_store.create(payload.language_mode, pod.id)
     use_gemini_live = settings.voice_provider == "gemini_live" and bool(settings.gemini_api_key)
-    if use_gemini_live:
+    if pod.id == "pod4":
+        # Pod 4's own pipeline greets the caller itself once they join.
+        greeting, provider = "", "pod4-pipeline"
+    elif use_gemini_live:
         greeting, provider = "", "gemini-live"
     else:
         greeting, provider = await generate_turn(session)
@@ -107,7 +133,7 @@ async def resume_voice_call(call_id: str, payload: CreateCallRequest) -> VoiceJo
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This call can no longer be resumed.")
     try:
         livekit_url = client_livekit_url(payload.client_host)
-        if settings.voice_provider == "gemini_live" and settings.gemini_api_key:
+        if session.conversation_pod == "pod4" or (settings.voice_provider == "gemini_live" and settings.gemini_api_key):
             greeting = ""
         else:
             greeting, provider = await generate_turn(session)
@@ -201,12 +227,28 @@ async def _export_call_log(session) -> None:
         "provider": settings.voice_provider,
         "final_state": {
             "phase": "closed",
-            "conversation": session.conversation_state.model_dump(mode="json"),
+            "conversation_schema": {"pod4": "pod4-v1", "pod5": "pod5-v1"}[session.conversation_pod],
+            "conversation": (
+                session.pod4_state.model_dump(mode="json")
+                if session.conversation_pod == "pod4"
+                else session.pod5_state.model_dump(mode="json")
+            ),
             "covered_goals": session.covered_goals,
             "rolling_summary": session.rolling_summary,
             "latest_user_text": session.latest_user_text,
             "recent_questions": session.recent_questions,
-            "idle_nudge_details_used": session.idle_nudge_details_used,
+            **(
+                {
+                    # TOP-1 / RETRY-7: every goal covered, skipped, or not covered with a reason.
+                    "coverage_report": pod5_coverage_report(session.pod5_state, final=True),
+                    "seed": session.pod5_state.seed,
+                }
+                if session.conversation_pod == "pod5"
+                else {
+                    "coverage_report": pod4_coverage_report(session.pod4_state, final=True),
+                    "seed": session.pod4_state.seed,
+                }
+            ),
         },
         "transcript": session.export_transcript or session.transcript,
     }

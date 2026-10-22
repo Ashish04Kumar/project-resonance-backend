@@ -16,7 +16,7 @@ async def main() -> None:
         return
     session = await call_store.create(language)  # type: ignore[arg-type]
     assistant, provider = await generate_turn(session)
-    print(f"\nBondAI [{provider}]: {assistant}")
+    print(f"\nResonance [{provider}]: {assistant}")
     for turn_number in range(1, 16):
         user_text = input(f"\nYou ({turn_number}/15, /end to stop): ").strip()
         if user_text.lower() == "/end":
@@ -25,7 +25,7 @@ async def main() -> None:
             print("Share a short answer, or type /end.")
             continue
         assistant, provider = await generate_turn(session, user_text)
-        print(f"\nBondAI [{provider}]: {assistant}")
+        print(f"\nResonance [{provider}]: {assistant}")
     call_store.remove(session.call_id)
     print("\nSession ended and its in-memory transcript was discarded.")
 
